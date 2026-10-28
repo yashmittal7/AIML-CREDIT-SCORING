@@ -1,4 +1,5 @@
 import { useState } from 'react'
+
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,9 +15,15 @@ import {
 
 import Review from './Review'
 import Assessment from './Assessment'
+import { getCreditAssessment } from '../services/api'
+
+
 
 function Application() {
   const [step, setStep] = useState(1)
+  const [assessmentResult, setAssessmentResult] = useState(null)
+  const [assessmentError, setAssessmentError] = useState('')
+  const [isAssessing, setIsAssessing] = useState(false)
 
   const [formData, setFormData] = useState({
     // STEP 1
@@ -126,10 +133,35 @@ function Application() {
   // NEXT
   // -----------------------------------------
 
-  const handleNext = (e) => {
-    e.preventDefault()
+  const handleNext = async (e) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault()
+    }
 
-    if (step < 7) {
+    // The Review screen is step 6. Request the ML prediction before showing step 7.
+    if (step === 6) {
+      if (isAssessing) return
+
+      setIsAssessing(true)
+      setAssessmentError('')
+
+      try {
+        const result = await getCreditAssessment(formData)
+        setAssessmentResult(result)
+        setStep(7)
+      } catch (error) {
+        setAssessmentError(
+          error?.message ||
+            'Unable to generate the assessment. Check that the Python backend is running.'
+        )
+      } finally {
+        setIsAssessing(false)
+      }
+
+      return
+    }
+
+    if (step < 6) {
       setStep((previousStep) => previousStep + 1)
     }
   }
@@ -1077,11 +1109,31 @@ function Application() {
               ================================= */}
 
               {step === 6 && (
-                <Review
-                  formData={formData}
-                  onBack={handleBack}
-                  onContinue={handleNext}
-                />
+                <>
+                  {isAssessing && (
+                    <div
+                      role="status"
+                      className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800"
+                    >
+                      Generating your assessment. Please wait...
+                    </div>
+                  )}
+
+                  {assessmentError && (
+                    <div
+                      role="alert"
+                      className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+                    >
+                      {assessmentError}
+                    </div>
+                  )}
+
+                  <Review
+                    formData={formData}
+                    onBack={handleBack}
+                    onContinue={handleNext}
+                  />
+                </>
               )}
 
               {/* =================================
@@ -1089,7 +1141,7 @@ function Application() {
               ================================= */}
 
               {step === 7 && (
-                <Assessment />
+                <Assessment result={assessmentResult} />
               )}
 
             </div>
